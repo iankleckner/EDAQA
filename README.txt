@@ -15,6 +15,7 @@ CHANGELOG
 
 2016/12/18 Start the README file
 2019/02/11 Update code to output FILTERED EDA data and option for NO filtering
+2025/02/15 Fix error to run without temperature data
 
 ---------------------------------------------------------
 LIST OF FILES
