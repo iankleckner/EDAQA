@@ -18,7 +18,8 @@ function [EDA_datum_valid, data_EDA_uS_filtered] = run_automated_EDAQA( ...
 %       data_temperature_C - 1D vector where each element is temperature in
 %           Celcius ( if no temperature data availble, set as empty matrix, [] ).
 %
-%       QA_filter_window_EDA_sec - Filter window length in sec (e.g., 2)
+%       QA_filter_window_EDA_sec - Filter window length in sec (e.g., 2),
+%       use NaN to disable filter
 %
 %       QA_EDA_floor - Rule 1, Lower limit of EDA data in uS (e.g., 0.05)
 %       QA_EDA_ceiling - Rule 1, Upper limit of EDA data in uS (e.g., 60)
@@ -41,8 +42,25 @@ function [EDA_datum_valid, data_EDA_uS_filtered] = run_automated_EDAQA( ...
 %
 %   CHANGELOG
 %       2016/12/18 Put in function form for publication
+%       2019/02/11 Filter is optional (use NaN) to disable it
+%       2025/02/15 Fix code to allow working without temperature
 
     %% Check that inputs are valid
+
+    % If no temperature data provided, then set it to between temperature
+    % min and max so it will never indicate data as "invalid"
+    if( isempty(data_temperature_C) )
+        QA_temperature_C_min = 0;
+        QA_temperature_C_max = 1;
+        data_temperature_C = 0.5 * ones(size(data_EDA_uS));
+        
+    else
+        % Temperature floor must be less than temperature ceiling
+        if( QA_temperature_C_min >= QA_temperature_C_max )
+            fprintf('\n');
+            error('Temperature min must be less than temperature max');
+        end
+    end
     
     % Input data must be same length
     if( length(data_EDA_uS) ~= length(data_time_sec) || ...
@@ -58,20 +76,6 @@ function [EDA_datum_valid, data_EDA_uS_filtered] = run_automated_EDAQA( ...
         error('EDA floor must be less than EDA ceiling');
     end
     
-    % If no temperature data provided, then set it to between temperature
-    % min and max so it will never indicate data as "invalid"
-    if( isempty(data_temperature_C) )
-        QA_temperature_C_min = 0;
-        QA_temperature_C_max = 1;
-        data_temperature_C = 0.5 * ones(1,length(data_EDA_uS));
-        
-    else
-        % Temperature floor must be less than temperature ceiling
-        if( QA_temperature_C_min >= QA_temperature_C_max )
-            fprintf('\n');
-            error('Temperature min must be less than temperature max');
-        end
-    end
 
     %% Process data (filter, checks, etc.)
     
@@ -102,7 +106,8 @@ function [EDA_datum_valid, data_EDA_uS_filtered] = run_automated_EDAQA( ...
         fprintf('\n** Temperature data: Replacing found NaN number %d with %f', k, data_temperature_C(k_NaN));
     end
 
-    try
+    if( ~isnan(QA_filter_window_EDA_sec) )
+        try
         % Filter with small window for quality assessment            
         windowSize = QA_filter_window_EDA_sec / sampling_period_EDA;    
         b = (1/windowSize)*ones(1,windowSize);
@@ -124,10 +129,15 @@ function [EDA_datum_valid, data_EDA_uS_filtered] = run_automated_EDAQA( ...
             fprintf('\n\tNumber of NaNs in raw temperature data: %d (%0.0f%%)', sum(isnan(data_temperature_C)),  100*sum(isnan(data_temperature_C))/length(data_temperature_C));
         end
 
-    catch error_message
-        % There was an error processing. Skip this participant
-        fprintf('\n** ERROR: %s\n%s', error_message.message, error_message.identifier);
-        return;
+        catch error_message
+            % There was an error processing. Skip this participant
+            fprintf('\n** ERROR: %s\n%s', error_message.message, error_message.identifier);
+            return;
+        end
+    else
+        % Use UNFILTERED data
+        data_EDA_uS_filtered        = data_EDA_uS;
+        data_temperature_C_filtered = data_temperature_C;
     end
 
     %% Quality assessment of EDA data
